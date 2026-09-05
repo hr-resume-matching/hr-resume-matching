@@ -4,9 +4,16 @@
 // v4.5.10：新增 IP 位址與瀏覽器（User-Agent）紀錄。這兩項刻意從「伺服器收到的請求本身」讀取，
 // 不是由瀏覽器端 JavaScript 回報——因為瀏覽器端的值使用者自己就能竄改，從請求本身讀到的
 // 才是後台真正收到這次連線的來源，才有稽核意義。
-const { getStore } = require('@netlify/blobs');
+const { getStore, connectLambda } = require('@netlify/blobs');
+// v4.5.24 fix: MissingBlobsEnvironmentError — Netlify only auto-injects the Blobs siteID/token
+// into functions written in the newer ESM "Functions v2" style. This file uses the classic
+// `exports.handler = async (event, context) => {...}` signature (Netlify's own docs call this
+// "Lambda compatibility mode"), where that auto-injection does NOT happen automatically — the
+// environment has to be wired up manually by calling connectLambda(event) first, immediately
+// before any getStore() call. Confirmed against Netlify's own @netlify/blobs README, not a guess.
 
 exports.handler = async (event) => {
+  connectLambda(event); // must run before any getStore() call below
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: JSON.stringify({ ok: false, error: 'Method not allowed' }) };
   }

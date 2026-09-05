@@ -5,11 +5,18 @@
 // 重要：這份履歷原始檔案含有應徵者的完整個人資料，一旦啟用即會集中保存在企業後台，請企業自行
 // 依當地個資法規（例如台灣個資法）規劃保存期限、告知應徵者、以及誰有權限存取，本功能只負責
 // 技術上的保存與稽核，不能取代企業自己的個資治理政策。
-const { getStore } = require('@netlify/blobs');
+const { getStore, connectLambda } = require('@netlify/blobs');
+// v4.5.24 fix: MissingBlobsEnvironmentError — Netlify only auto-injects the Blobs siteID/token
+// into functions written in the newer ESM "Functions v2" style. This file uses the classic
+// `exports.handler = async (event, context) => {...}` signature (Netlify's own docs call this
+// "Lambda compatibility mode"), where that auto-injection does NOT happen automatically — the
+// environment has to be wired up manually by calling connectLambda(event) first, immediately
+// before any getStore() call. Confirmed against Netlify's own @netlify/blobs README, not a guess.
 
 const MAX_BYTES = 8 * 1024 * 1024; // 8MB 上限：一般履歷PDF遠小於此，避免有人上傳超大檔案塞爆儲存空間
 
 exports.handler = async (event, context) => {
+  connectLambda(event); // must run before any getStore() call below
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: JSON.stringify({ ok: false, error: 'Method not allowed' }) };
   }

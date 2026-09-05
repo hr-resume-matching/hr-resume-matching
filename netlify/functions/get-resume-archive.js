@@ -2,10 +2,17 @@
 // 檔名、上傳者、時間、大小等中繼資料），下載實際檔案內容請改用 get-resume-blob.js。
 // 分成兩支函式是刻意的：清單頁需要快速載入很多筆，若每筆都夾帶完整 base64 檔案內容，資料量會
 // 暴增、拖慢管理者後台，因此清單只回傳中繼資料，真正下載時才單獨抓那一筆的完整內容。
-const { getStore } = require('@netlify/blobs');
+const { getStore, connectLambda } = require('@netlify/blobs');
+// v4.5.24 fix: MissingBlobsEnvironmentError — Netlify only auto-injects the Blobs siteID/token
+// into functions written in the newer ESM "Functions v2" style. This file uses the classic
+// `exports.handler = async (event, context) => {...}` signature (Netlify's own docs call this
+// "Lambda compatibility mode"), where that auto-injection does NOT happen automatically — the
+// environment has to be wired up manually by calling connectLambda(event) first, immediately
+// before any getStore() call. Confirmed against Netlify's own @netlify/blobs README, not a guess.
 const { isAdmin, ADMIN_REQUIRED_MESSAGE } = require('./_admin-auth');
 
 exports.handler = async (event, context) => {
+  connectLambda(event); // must run before any getStore() call below
   const user = context.clientContext && context.clientContext.user;
   if (!user) {
     return {

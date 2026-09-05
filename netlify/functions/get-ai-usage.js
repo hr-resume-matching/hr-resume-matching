@@ -2,10 +2,17 @@
 // 方便回答「這個月哪個部門/哪個人用最多」。故意不換算成金額——不同服務商、不同模型的每百萬token
 // 價格常常調整，寫死一個價格在程式碼裡很快就會過時、誤導判斷；管理者若要換算成費用，可以自行
 // 依照目前公告的價格乘算，或在後台頁面自行輸入單價再計算（見 admin-login-log.html 的說明文字）。
-const { getStore } = require('@netlify/blobs');
+const { getStore, connectLambda } = require('@netlify/blobs');
+// v4.5.24 fix: MissingBlobsEnvironmentError — Netlify only auto-injects the Blobs siteID/token
+// into functions written in the newer ESM "Functions v2" style. This file uses the classic
+// `exports.handler = async (event, context) => {...}` signature (Netlify's own docs call this
+// "Lambda compatibility mode"), where that auto-injection does NOT happen automatically — the
+// environment has to be wired up manually by calling connectLambda(event) first, immediately
+// before any getStore() call. Confirmed against Netlify's own @netlify/blobs README, not a guess.
 const { isAdmin, ADMIN_REQUIRED_MESSAGE } = require('./_admin-auth');
 
 exports.handler = async (event, context) => {
+  connectLambda(event); // must run before any getStore() call below
   const user = context.clientContext && context.clientContext.user;
   if (!user) {
     return {
