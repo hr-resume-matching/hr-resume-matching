@@ -1,0 +1,4 @@
+# 這個檔案告訴Netlify「你的小型伺服器程式放在哪個資料夾」，不需要修改任何內容。
+[build]
+  functions = "netlify/functions"
+  publish = "."

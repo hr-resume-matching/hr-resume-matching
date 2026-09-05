@@ -1,0 +1,9 @@
+{
+  "name": "hr-matching-netlify-functions",
+  "version": "1.0.0",
+  "private": true,
+  "description": "後台登入紀錄用的小型伺服器程式，部署到Netlify時會自動安裝這裡列出的套件，不需要你自己安裝任何東西。",
+  "dependencies": {
+    "@netlify/blobs": "^10.0.0"
+  }
+}
