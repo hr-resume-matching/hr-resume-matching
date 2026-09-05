@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>人資履歷職缺媒合決策系統｜v4.5.22</title>
+<title>人資履歷職缺媒合決策系統｜v4.5.23</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -168,6 +168,16 @@
      to hidden instead, a slow/failed script load would leave the whole tool wide open exactly
      when the login check that's supposed to gate it never ran. */
   .login-gate-overlay{position:fixed;inset:0;z-index:950;background:var(--paper,#F7F5EF);display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;}
+  /* v4.5.23 fix: the Netlify Identity widget's own login modal is a documented case of rendering
+     BEHIND other position:fixed elements on the host page — see
+     github.com/netlify/netlify-identity-widget/issues/94 ("Iframe do not appear on top") and #67
+     ("Add high z-index to iframe inline styles"). Our own .login-gate-overlay above is exactly
+     that kind of fixed element, and at z-index:950 it was very likely sitting on top of and
+     completely hiding the widget's own login popup — so clicking "使用 Google 登入" WAS opening
+     the modal, just invisibly, behind our own overlay. This forces the widget's known container id
+     (and, as a harmless fallback, any iframe the widget injects) above absolutely everything else
+     on the page, regardless of our own z-index choices. */
+  #netlify-identity-widget, iframe[title*="identity" i]{ z-index: 2147483647 !important; }
   .login-gate-box{max-width:440px;}
   .login-gate-box h2{margin:0 0 10px;font-size:20px;}
   .login-gate-box p{color:var(--ink-2,#5B5B54);font-size:13.5px;line-height:1.6;margin:0 0 16px;}
@@ -401,7 +411,7 @@
 
 <div class="app">
   <div class="sidebar">
-    <div class="brand"><div class="mark">人資媒合決策 v4.5.22</div><div class="sub">履歷 × 職缺 批次分析系統</div></div>
+    <div class="brand"><div class="mark">人資媒合決策 v4.5.23</div><div class="sub">履歷 × 職缺 批次分析系統</div></div>
     <div class="steps" id="stepsNav">
       <div class="step-item active" data-step="0"><div class="step-num">1</div><div class="step-text"><div class="t">履歷來源</div><div class="d">上傳PDF／人才庫</div></div></div>
       <div class="step-item" data-step="1"><div class="step-num">2</div><div class="step-text"><div class="t">輸入職缺</div><div class="d">含硬性條件設定</div></div></div>
@@ -852,6 +862,12 @@ function initNetlifyIdentity(){
   netlifyIdentity.on('init', user=>{ netlifyCurrentUser = user; updateLoginPill(); updateLoginGate(); applyGoogleIdentityToOperatorName(user); renderEnterpriseArchiveNote(); });
   netlifyIdentity.on('login', user=>{ netlifyCurrentUser = user; updateLoginPill(); updateLoginGate(); applyGoogleIdentityToOperatorName(user); logLoginEvent(user); renderEnterpriseArchiveNote(); netlifyIdentity.close(); });
   netlifyIdentity.on('logout', ()=>{ netlifyCurrentUser = null; updateLoginPill(); updateLoginGate(); applyGoogleIdentityToOperatorName(null); renderEnterpriseArchiveNote(); });
+  // v4.5.23: belt-and-suspenders alongside the z-index CSS fix above — while the widget's own
+  // modal is open, hide our gate outright (nothing left for it to compete with), and re-show it
+  // on close only if login still didn't happen. Covers the widget's own 'open'/'close' events,
+  // which are separate from 'login'/'logout'.
+  netlifyIdentity.on('open', ()=>{ const g=document.getElementById('loginGateOverlay'); if(g) g.classList.add('hidden'); });
+  netlifyIdentity.on('close', ()=>{ if(!netlifyCurrentUser) updateLoginGate(); });
   netlifyIdentity.init();
 }
 /* v4.5.12 fix: the call used to sit right here, but netlifyIdentity.init() can fire the 'init'
