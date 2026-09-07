@@ -141,8 +141,28 @@ async function reloadCurrentTab(){
   else await reloadUsage();
 }
 
-function authHeaders(){
-  return { 'Authorization': 'Bearer ' + lastUser.token.access_token };
+// v4.5.25 fix: root cause of "讀取失敗：請先登入才能查看紀錄" showing up even though the page
+// clearly says 已登入 —
+// `lastUser.token.access_token` is a SNAPSHOT of the JWT taken at the moment of login/init. Netlify
+// Identity JWTs expire after 1 hour by default; the widget does NOT mutate that snapshot in place
+// when it silently refreshes in the background, so any tab left open past that 1 小時 keeps sending
+// the same, now-expired token on every fetch. The backend (get-login-logs.js /
+// get-resume-archive.js / get-ai-usage.js) can't verify an expired JWT, so it falls through to the
+// "沒有登入" branch (401, '請先登入才能查看紀錄') — even though, from the person's point of view,
+// they very much are still logged in.
+// The fix: call `lastUser.jwt()` every time instead of reading the cached property. This is
+// netlify-identity-widget's (gotrue-js) own supported method for getting a token to call a
+// function with — it returns the current JWT if still valid, or transparently uses the stored
+// refresh_token to fetch a brand-new one if it has expired, with no user interaction needed. This
+// is also why "後續要登入也無法用" shouldn't happen anymore: the fix works entirely in the
+// background, so there's no dead-end state where the person is stuck re-logging in over and over.
+// (The one case this can't recover from is if the refresh_token itself is no longer valid — e.g.
+// the session was revoked, or the account hasn't opened this page in a very long time. That case
+// is handled separately below via the explicit 401 message, which now tells the person to log out
+// and back in, instead of silently mislabelling it as "you were never logged in".)
+async function authHeaders(){
+  const token = await lastUser.jwt();
+  return { 'Authorization': 'Bearer ' + token };
 }
 
 // v4.5.10: a 403 from either endpoint means "logged in, but not on the ADMIN_EMAILS allowlist" —
@@ -153,11 +173,19 @@ function renderPermissionError(tbodyId, colspan, message){
     `<tr><td colspan="${colspan}"><div class="err-box">${escapeHtml(message)}</div></td></tr>`;
 }
 
+// v4.5.25: shown when the backend replies 401 (couldn't verify who's calling) even though this
+// page's own UI still shows "已登入". In almost all cases the automatic token refresh in
+// authHeaders() above already prevents this from happening — the one situation it can't recover
+// from on its own is the underlying Netlify Identity *session* having actually ended (refresh
+// token itself revoked/expired, not just the short-lived access token), which does require an
+// actual re-login.
+const SESSION_EXPIRED_MESSAGE = '登入狀態已失效，請點右上角「登出」後，重新用 Google 帳號登入一次再試。若重新登入後仍出現此訊息，請聯繫系統開發者確認 Netlify Identity 設定。';
+
 async function reloadLogs(){
   const tbody = document.getElementById('logTableBody');
   tbody.innerHTML = '<tr><td colspan="5">載入中…</td></tr>';
   try{
-    const res = await fetch('/.netlify/functions/get-login-logs', { headers: authHeaders() });
+    const res = await fetch('/.netlify/functions/get-login-logs', { headers: await authHeaders() });
     const data = await res.json();
     if(data.ok){
       if(data.records.length === 0){
@@ -169,6 +197,8 @@ async function reloadLogs(){
       }
     }else if(res.status===403){
       renderPermissionError('logTableBody', 5, data.error);
+    }else if(res.status===401){
+      renderPermissionError('logTableBody', 5, SESSION_EXPIRED_MESSAGE);
     }else{
       tbody.innerHTML = `<tr><td colspan="5">讀取失敗：${escapeHtml(data.error||'未知錯誤')}</td></tr>`;
     }
@@ -188,7 +218,7 @@ async function reloadArchive(){
   const tbody = document.getElementById('archiveTableBody');
   tbody.innerHTML = '<tr><td colspan="5">載入中…</td></tr>';
   try{
-    const res = await fetch('/.netlify/functions/get-resume-archive', { headers: authHeaders() });
+    const res = await fetch('/.netlify/functions/get-resume-archive', { headers: await authHeaders() });
     const data = await res.json();
     if(data.ok){
       if(data.records.length === 0){
@@ -214,6 +244,8 @@ async function reloadArchive(){
       }
     }else if(res.status===403){
       renderPermissionError('archiveTableBody', 5, data.error);
+    }else if(res.status===401){
+      renderPermissionError('archiveTableBody', 5, SESSION_EXPIRED_MESSAGE);
     }else{
       tbody.innerHTML = `<tr><td colspan="5">讀取失敗：${escapeHtml(data.error||'未知錯誤')}</td></tr>`;
     }
@@ -227,10 +259,10 @@ async function reloadArchive(){
 // then triggers a normal browser save via a throwaway object URL.
 async function downloadResume(key, fileName){
   try{
-    const res = await fetch('/.netlify/functions/get-resume-blob?key=' + encodeURIComponent(key), { headers: authHeaders() });
+    const res = await fetch('/.netlify/functions/get-resume-blob?key=' + encodeURIComponent(key), { headers: await authHeaders() });
     if(!res.ok){
       const data = await res.json().catch(()=>({error:'下載失敗'}));
-      alert(data.error || '下載失敗');
+      alert(res.status===401 ? SESSION_EXPIRED_MESSAGE : (data.error || '下載失敗'));
       return;
     }
     const blob = await res.blob();
@@ -257,7 +289,7 @@ async function reloadUsage(){
   byUserBody.innerHTML = '<tr><td colspan="5">載入中…</td></tr>';
   byProviderBody.innerHTML = '<tr><td colspan="4">載入中…</td></tr>';
   try{
-    const res = await fetch('/.netlify/functions/get-ai-usage', { headers: authHeaders() });
+    const res = await fetch('/.netlify/functions/get-ai-usage', { headers: await authHeaders() });
     const data = await res.json();
     if(data.ok){
       totalsEl.innerHTML = `<b>全公司累計：</b>輸入 ${data.totals.totalInputTokens.toLocaleString()} tokens ｜ 輸出 ${data.totals.totalOutputTokens.toLocaleString()} tokens ｜ 共 ${data.totals.totalCalls.toLocaleString()} 次呼叫`;
@@ -270,6 +302,10 @@ async function reloadUsage(){
     }else if(res.status===403){
       totalsEl.innerHTML = '';
       renderPermissionError('usageByUserBody', 5, data.error);
+      byProviderBody.innerHTML = '';
+    }else if(res.status===401){
+      totalsEl.innerHTML = '';
+      renderPermissionError('usageByUserBody', 5, SESSION_EXPIRED_MESSAGE);
       byProviderBody.innerHTML = '';
     }else{
       totalsEl.innerHTML = `讀取失敗：${escapeHtml(data.error||'未知錯誤')}`;

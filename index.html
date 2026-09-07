@@ -161,6 +161,11 @@
   .api-settings-pill .dot{width:8px;height:8px;border-radius:50%;background:#8894A8;flex:none;}
   .api-settings-pill.on{background:var(--jade);}
   .api-settings-pill.on .dot{background:#fff;}
+  /* v4.5.25: 「後台管理」pill — only shown to accounts on ADMIN_EMAILS_FOR_UI (see JS below),
+     opens admin-login-log.html in a new tab. Uses the gold accent so it reads as a distinct,
+     privileged action rather than another login/settings toggle. */
+  .admin-panel-pill{display:none;align-items:center;gap:8px;background:var(--gold);color:#fff;border:none;border-radius:20px;padding:9px 16px;font-size:12.5px;font-weight:700;cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.2);font-family:'Noto Sans TC';}
+  .admin-panel-pill.show{display:flex;}
   .modal-overlay{display:none;position:fixed;inset:0;background:rgba(18,33,58,.55);z-index:900;align-items:center;justify-content:center;padding:20px;}
   /* v4.5.22: fail-closed login gate — deliberately NOT display:none by default (unlike
      .modal-overlay above), so it's visible from first paint and only JS explicitly hiding it
@@ -278,7 +283,7 @@
   .kanban-card .cj{color:var(--muted);font-size:11px;margin-bottom:6px;}
   .kanban-card select{width:100%;font-size:11.5px;padding:5px;border-radius:6px;border:1px solid var(--line);font-family:inherit;}
   @media print{
-    .sidebar,.toolbar,.tabs,.no-print,.api-settings-pill,.modal-overlay{display:none !important;}
+    .sidebar,.toolbar,.tabs,.no-print,.api-settings-pill,.admin-panel-pill,.modal-overlay{display:none !important;}
     .main{padding:0;max-width:100%;}
     .job-report .body{display:block !important;}
     body{background:#fff;}
@@ -334,7 +339,7 @@
     .exec-stats{gap:14px 22px;}
     .toolbar{gap:8px;}
     .toolbar .btn{flex:1 1 auto;}
-    .api-settings-pill span:last-child,.login-pill span:last-child{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle;}
+    .api-settings-pill span:last-child,.login-pill span:last-child,.admin-panel-pill span:last-child{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle;}
     .modal-box{padding:16px;border-radius:10px;}
     .cand-rank{width:24px;height:24px;font-size:11px;}
     .weight-row label{width:56px;font-size:11px;}
@@ -347,6 +352,7 @@
 <body>
 
 <div class="top-right-bar no-print">
+  <button class="admin-panel-pill" id="adminPanelPill" onclick="openAdminPanel()"><span class="dot"></span><span>後台管理</span></button>
   <button class="login-pill" id="loginPill" onclick="handleLoginClick()"><span class="dot"></span><span id="loginPillText">使用 Google 登入</span></button>
   <button class="api-settings-pill" id="apiSettingsPill" onclick="openApiModal()"><span class="dot"></span><span id="apiSettingsPillText">API 設定</span></button>
 </div>
@@ -793,6 +799,25 @@ refreshApiPill();
    turned on as an external provider — in any other preview/local context netlifyIdentity will be
    undefined and the button explains that plainly instead of silently doing nothing. */
 let netlifyCurrentUser = null;
+// v4.5.25: 這份清單只用來決定「前台要不要顯示後台管理按鈕」這個UI層面的判斷，並不是真正的權限
+// 控管——真正決定誰能打開 admin-login-log.html 看到資料的，是 Netlify 環境變數 ADMIN_EMAILS
+// （見 netlify/functions/_admin-auth.js），那道檢查在伺服器端執行，前端改不了。這裡故意刻意
+// 「重複」列一份，是因為前端沒有辦法讀到伺服器的環境變數，只能自己知道要對誰顯示按鈕；如果日後
+// 調整了 ADMIN_EMAILS 名單，也請記得同步修改這裡，否則會出現「按鈕沒顯示但其實有權限」或
+// 「按鈕有顯示但點進去看到403」這種UI與實際權限對不齊的狀況（後者不影響資安，只是體驗不一致）。
+const ADMIN_EMAILS_FOR_UI = ['felix670131@gmail.com'];
+function isAdminForUI(user){
+  if(!user || !user.email) return false;
+  return ADMIN_EMAILS_FOR_UI.includes(user.email.trim().toLowerCase());
+}
+function updateAdminPanelPill(){
+  const pill = document.getElementById('adminPanelPill');
+  if(!pill) return;
+  pill.classList.toggle('show', isAdminForUI(netlifyCurrentUser));
+}
+function openAdminPanel(){
+  window.open('admin-login-log.html', '_blank', 'noopener');
+}
 function updateLoginPill(){
   const pill = document.getElementById('loginPill');
   const txt = document.getElementById('loginPillText');
@@ -858,10 +883,10 @@ async function handleLoginClick(){
   }
 }
 function initNetlifyIdentity(){
-  if(typeof netlifyIdentity === 'undefined'){ updateLoginPill(); updateLoginGate(); return; }
-  netlifyIdentity.on('init', user=>{ netlifyCurrentUser = user; updateLoginPill(); updateLoginGate(); applyGoogleIdentityToOperatorName(user); renderEnterpriseArchiveNote(); });
-  netlifyIdentity.on('login', user=>{ netlifyCurrentUser = user; updateLoginPill(); updateLoginGate(); applyGoogleIdentityToOperatorName(user); logLoginEvent(user); renderEnterpriseArchiveNote(); netlifyIdentity.close(); });
-  netlifyIdentity.on('logout', ()=>{ netlifyCurrentUser = null; updateLoginPill(); updateLoginGate(); applyGoogleIdentityToOperatorName(null); renderEnterpriseArchiveNote(); });
+  if(typeof netlifyIdentity === 'undefined'){ updateLoginPill(); updateAdminPanelPill(); updateLoginGate(); return; }
+  netlifyIdentity.on('init', user=>{ netlifyCurrentUser = user; updateLoginPill(); updateAdminPanelPill(); updateLoginGate(); applyGoogleIdentityToOperatorName(user); renderEnterpriseArchiveNote(); });
+  netlifyIdentity.on('login', user=>{ netlifyCurrentUser = user; updateLoginPill(); updateAdminPanelPill(); updateLoginGate(); applyGoogleIdentityToOperatorName(user); logLoginEvent(user); renderEnterpriseArchiveNote(); netlifyIdentity.close(); });
+  netlifyIdentity.on('logout', ()=>{ netlifyCurrentUser = null; updateLoginPill(); updateAdminPanelPill(); updateLoginGate(); applyGoogleIdentityToOperatorName(null); renderEnterpriseArchiveNote(); });
   // v4.5.23: belt-and-suspenders alongside the z-index CSS fix above — while the widget's own
   // modal is open, hide our gate outright (nothing left for it to compete with), and re-show it
   // on close only if login still didn't happen. Covers the widget's own 'open'/'close' events,
@@ -3147,7 +3172,7 @@ function exportHtmlReport(){
   const forcedCss = `
     body{background:#fff;}
     .report-page{max-width:1000px;margin:0 auto;padding:40px 32px 60px;}
-    .no-print,.toolbar,.tabs,.api-settings-pill,.modal-overlay{display:none !important;}
+    .no-print,.toolbar,.tabs,.api-settings-pill,.admin-panel-pill,.modal-overlay{display:none !important;}
     .job-report .body{display:block !important;}
     .tab-content{display:block !important;margin-bottom:40px;}
     .tab-content:last-of-type{margin-bottom:0;}
