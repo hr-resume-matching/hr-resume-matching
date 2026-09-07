@@ -15,6 +15,8 @@
   .card{background:var(--paper-2);border:1px solid var(--line);border-radius:12px;padding:24px;margin-bottom:20px;}
   .btn{font-weight:700;font-size:13.5px;border:none;border-radius:8px;padding:11px 22px;cursor:pointer;background:var(--ink);color:#fff;}
   .btn-ghost{background:transparent;color:var(--ink);border:1px solid var(--line);}
+  .btn-danger{background:#B3261E;color:#fff;}
+  .btn-danger:hover{background:#8f1e18;}
   .btn-sm{padding:6px 12px;font-size:12px;}
   .top-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px;}
   #whoami{font-size:13px;color:var(--muted);word-break:break-all;}
@@ -72,8 +74,8 @@
 
     <div class="card tab-panel" id="tabArchive">
       <div class="table-scroll"><table>
-        <thead><tr><th>上傳時間</th><th>檔名</th><th>上傳者</th><th>檔案大小</th><th>下載</th></tr></thead>
-        <tbody id="archiveTableBody"><tr><td colspan="5">載入中…</td></tr></tbody>
+        <thead><tr><th>上傳時間</th><th>檔名</th><th>上傳者</th><th>檔案大小</th><th>下載</th><th>刪除</th></tr></thead>
+        <tbody id="archiveTableBody"><tr><td colspan="6">載入中…</td></tr></tbody>
       </table></div>
     </div>
 
@@ -216,13 +218,13 @@ function formatSize(bytes){
 
 async function reloadArchive(){
   const tbody = document.getElementById('archiveTableBody');
-  tbody.innerHTML = '<tr><td colspan="5">載入中…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="6">載入中…</td></tr>';
   try{
     const res = await fetch('/.netlify/functions/get-resume-archive', { headers: await authHeaders() });
     const data = await res.json();
     if(data.ok){
       if(data.records.length === 0){
-        tbody.innerHTML = '<tr><td colspan="5">目前尚無封存的履歷檔案（此功能需在主系統勾選啟用後才會開始保存新上傳的履歷）。</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6">目前尚無封存的履歷檔案（此功能需在主系統勾選啟用後才會開始保存新上傳的履歷）。</td></tr>';
       }else{
         // v4.5.10: rows are built without inline onclick="" — interpolating a filename into an
         // inline handler string means it passes through HTML-attribute escaping and then gets
@@ -237,20 +239,24 @@ async function reloadArchive(){
           <td>${escapeHtml(r.uploaderName||'')}${r.uploaderName?'<br>':''}<span class="mono">${escapeHtml(r.uploaderEmail||'')}</span></td>
           <td>${formatSize(r.sizeBytes)}</td>
           <td><button class="btn-ghost btn btn-sm archive-dl-btn" data-key="${escapeAttr(r.key)}" data-filename="${escapeAttr(r.fileName)}">下載</button></td>
+          <td><button class="btn-danger btn btn-sm archive-del-btn" data-key="${escapeAttr(r.key)}" data-filename="${escapeAttr(r.fileName)}">刪除</button></td>
         </tr>`).join('');
         tbody.querySelectorAll('.archive-dl-btn').forEach(btn=>{
           btn.addEventListener('click', ()=>downloadResume(btn.dataset.key, btn.dataset.filename));
         });
+        tbody.querySelectorAll('.archive-del-btn').forEach(btn=>{
+          btn.addEventListener('click', ()=>deleteResume(btn.dataset.key, btn.dataset.filename, btn));
+        });
       }
     }else if(res.status===403){
-      renderPermissionError('archiveTableBody', 5, data.error);
+      renderPermissionError('archiveTableBody', 6, data.error);
     }else if(res.status===401){
-      renderPermissionError('archiveTableBody', 5, SESSION_EXPIRED_MESSAGE);
+      renderPermissionError('archiveTableBody', 6, SESSION_EXPIRED_MESSAGE);
     }else{
-      tbody.innerHTML = `<tr><td colspan="5">讀取失敗：${escapeHtml(data.error||'未知錯誤')}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6">讀取失敗：${escapeHtml(data.error||'未知錯誤')}</td></tr>`;
     }
   }catch(e){
-    tbody.innerHTML = `<tr><td colspan="5">連線失敗：${escapeHtml(e.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6">連線失敗：${escapeHtml(e.message)}</td></tr>`;
   }
 }
 
@@ -273,6 +279,39 @@ async function downloadResume(key, fileName){
     URL.revokeObjectURL(url);
   }catch(e){
     alert('下載失敗：' + e.message);
+  }
+}
+
+// v4.5.26 新增：刪除單一一筆已封存的履歷檔案。刪除是不可逆動作（連檔案本身與中繼資料一起從
+// Netlify Blobs 移除，不是移到某個「垃圾桶」），所以先用瀏覽器原生 confirm 跟管理者再三確認一次，
+// 且提示文字裡帶上檔名，避免手滑點到旁邊那一列。確認後才呼叫 delete-resume-archive.js，成功後
+// 直接把該按鈕所在的整列從畫面上移除（不用整頁重新整理、也不用重打一次 get-resume-archive.js），
+// 讓刪除的回饋是即時的；失敗則跳出錯誤訊息、該列保留原狀，方便管理者重試。
+async function deleteResume(key, fileName, btn){
+  const confirmed = confirm(`確定要刪除這份履歷檔案嗎？此動作無法復原。\n\n檔名：${fileName || '（未知檔名）'}`);
+  if(!confirmed) return;
+  const row = btn ? btn.closest('tr') : null;
+  const originalText = btn ? btn.textContent : '';
+  if(btn){ btn.disabled = true; btn.textContent = '刪除中…'; }
+  try{
+    const res = await fetch('/.netlify/functions/delete-resume-archive?key=' + encodeURIComponent(key), {
+      method: 'DELETE',
+      headers: await authHeaders()
+    });
+    const data = await res.json().catch(()=>({ ok:false, error:'伺服器回應格式錯誤' }));
+    if(data.ok){
+      if(row) row.remove();
+      else await reloadArchive();
+    }else if(res.status===401){
+      alert(SESSION_EXPIRED_MESSAGE);
+      if(btn){ btn.disabled = false; btn.textContent = originalText; }
+    }else{
+      alert(data.error || '刪除失敗');
+      if(btn){ btn.disabled = false; btn.textContent = originalText; }
+    }
+  }catch(e){
+    alert('刪除失敗：' + e.message);
+    if(btn){ btn.disabled = false; btn.textContent = originalText; }
   }
 }
 

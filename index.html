@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>人資履歷職缺媒合決策系統｜v4.5.24</title>
+<title>人資履歷職缺媒合決策系統｜v4.5.27</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -81,9 +81,6 @@
   .job-card .row1{display:flex;gap:10px;align-items:center;}
   .job-card input[type=text],.job-card select,.job-card input[type=number]{flex:1;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;}
   .job-card textarea{width:100%;min-height:90px;border:1px solid var(--line);border-radius:6px;padding:10px;font-size:12.5px;font-family:inherit;resize:vertical;}
-  .job-104-row{display:flex;gap:8px;background:#F7F7F4;border:1px dashed var(--line);border-radius:8px;padding:8px;}
-  .job-104-row input{flex:1;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-size:12.5px;font-family:inherit;min-width:0;}
-  .job-104-row .btn{flex:none;white-space:nowrap;}
   .hardfilter-grid{display:grid;grid-template-columns:1fr 1fr 2fr;gap:8px;margin-top:4px;}
   .field-label{font-size:11px;color:var(--muted);margin-bottom:3px;display:block;}
   .toolbar{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;}
@@ -291,7 +288,7 @@
     .tab-content:last-of-type{page-break-after:auto;}
     .print-only-heading{display:block !important; font-size:19px; font-weight:700; margin:8px 0 14px; border-bottom:2px solid var(--ink); padding-bottom:8px;}
   }
-  /* ===== RWD overhaul (v4.5.2, doc pass v4.5.3, mobile step-bar fix v4.5.4, UX/PDF-accuracy pass v4.5.5, report HTML export + exec-facing title fix v4.5.6, kanban responsive-grid wrap fix v4.5.7, PDF shadow-duplicate-text cleanup v4.5.8, cross-page dup-line cleanup + honest partial-extraction detection + HTML resume upload v4.5.9, enterprise admin console: role-gated login audit (IP/browser) + opt-in resume archive with download v4.5.10, expanded skill-synonym dictionary + HR-editable synonyms + weight templates + AI token-usage dashboard + report-language setting v4.5.11, pdf.js CDN-load crash guard + Netlify Identity TDZ crash guard v4.5.12–13, honest keep-one duplicate-line confirmation + per-file 45s extraction timeout + head/tail text preview v4.5.14, table/prose false-positive column-gutter rejection v4.5.15, honest detection of PDFs with a broken font ToUnicode table — the version label below is now bumped on every fix, not left at v4.5.11, specifically so this string is a reliable way to confirm which build is actually running v4.5.16) =====
+  /* ===== RWD overhaul (v4.5.2, doc pass v4.5.3, mobile step-bar fix v4.5.4, UX/PDF-accuracy pass v4.5.5, report HTML export + exec-facing title fix v4.5.6, kanban responsive-grid wrap fix v4.5.7, PDF shadow-duplicate-text cleanup v4.5.8, cross-page dup-line cleanup + honest partial-extraction detection + HTML resume upload v4.5.9, enterprise admin console: role-gated login audit (IP/browser) + opt-in resume archive with download v4.5.10, expanded skill-synonym dictionary + HR-editable synonyms + weight templates + AI token-usage dashboard + report-language setting v4.5.11, pdf.js CDN-load crash guard + Netlify Identity TDZ crash guard v4.5.12–13, honest keep-one duplicate-line confirmation + per-file 45s extraction timeout + head/tail text preview v4.5.14, table/prose false-positive column-gutter rejection v4.5.15, honest detection of PDFs with a broken font ToUnicode table — the version label below is now bumped on every fix, not left at v4.5.11, specifically so this string is a reliable way to confirm which build is actually running v4.5.16, front-page 後台管理 entry pill (shown only to ADMIN_EMAILS_FOR_UI accounts) + fixed admin-login-log.html sending a stale/expired Identity access_token instead of refreshing it via lastUser.jwt(), which was the actual cause of the "請先登入才能查看紀錄" error after ~1hr of being logged in v4.5.25, admin-login-log.html 履歷封存 tab: added a 刪除 (delete) button per row alongside 下載, backed by a new delete-resume-archive.js function that reuses the same isAdmin/ADMIN_EMAILS check as the rest of the admin endpoints, with a confirm() guard before the irreversible delete v4.5.26, removed the「從104自動擷取」button/URL field and its fetch-104-job.js backend — 104 blocks non-browser (serverless-IP) requests to its internal AJAX endpoint often enough that the feature was unreliable in practice as seen in production, with no honest server-side fix short of a full headless-browser/anti-bot-evasion setup that is itself fragile and against 104's terms of use; the JD textarea's existing paste-to-detect-title behaviour is now the sole, reliable path — copy the whole 104 (or any) job page and paste it in v4.5.27) =====
      Goal: every screen usable and legible from a 360px phone up through desktop, without any
      horizontal page-scroll (tables/kanban get their OWN internal scroll instead), and with touch
      targets big enough for a thumb. Two breakpoints: 820px (tablet/large phone — switch to a
@@ -314,7 +311,6 @@
     .page-head h1{font-size:20px;}
     .card{padding:18px 16px;}
     .hardfilter-grid{grid-template-columns:1fr;}
-    .job-104-row{flex-direction:column;align-items:stretch;}
     .exec-stats{gap:18px;}
     .exec-stats .stat b{font-size:19px;}
     .modal-box{padding:20px;max-height:92vh;}
@@ -417,7 +413,7 @@
 
 <div class="app">
   <div class="sidebar">
-    <div class="brand"><div class="mark">人資媒合決策 v4.5.24</div><div class="sub">履歷 × 職缺 批次分析系統</div></div>
+    <div class="brand"><div class="mark">人資媒合決策 v4.5.27</div><div class="sub">履歷 × 職缺 批次分析系統</div></div>
     <div class="steps" id="stepsNav">
       <div class="step-item active" data-step="0"><div class="step-num">1</div><div class="step-text"><div class="t">履歷來源</div><div class="d">上傳PDF／人才庫</div></div></div>
       <div class="step-item" data-step="1"><div class="step-num">2</div><div class="step-text"><div class="t">輸入職缺</div><div class="d">含硬性條件設定</div></div></div>
@@ -2001,12 +1997,7 @@ function renderJobList(){
         <input type="text" class="jsubsidiary" placeholder="所屬子公司／事業處（選填）" value="${escapeAttr(j.subsidiary)}" style="max-width:180px;">
         <button class="icon-btn" title="移除" aria-label="移除職缺「${escapeAttr(j.title||('第'+(state.jobs.indexOf(j)+1)+'個職缺'))}」">✕</button>
       </div>
-      <div class="job-104-row">
-        <input type="text" class="j104url" placeholder="貼上104職缺網址或代碼（選填，例如 https://www.104.com.tw/job/7pq1a）">
-        <button class="btn btn-ghost btn-sm j104-fetch-btn" type="button">從104自動擷取</button>
-      </div>
-      <div class="job-104-result"></div>
-      <textarea class="jtext" placeholder="貼上完整職缺說明：工作內容、必要條件、加分條件…（也可直接把104職缺頁面整頁複製貼上，系統會自動抓出職缺名稱）">${escapeHtml(j.text)}</textarea>
+      <textarea class="jtext" placeholder="貼上完整職缺說明：工作內容、必要條件、加分條件…（可直接把104或其他職缺頁面整頁複製貼上，系統會自動抓出職缺名稱）">${escapeHtml(j.text)}</textarea>
       <div class="job-validation-note" role="status"></div>
       <div>
         <div class="field-label">硬性條件（選填，不符合者將在分析時直接排除，不進入 AI 配對）</div>
@@ -2042,31 +2033,6 @@ function renderJobList(){
         }
       }, 0);
     });
-    const j104Btn = card.querySelector('.j104-fetch-btn');
-    const j104Result = card.querySelector('.job-104-result');
-    j104Btn.onclick = async ()=>{
-      const urlInput = card.querySelector('.j104url');
-      const raw = urlInput.value.trim();
-      if(!raw){ j104Result.innerHTML = `<div class="jd-check-box needs_improvement">請先貼上104職缺網址或代碼。</div>`; return; }
-      j104Btn.disabled = true; const origTxt = j104Btn.textContent; j104Btn.textContent = '擷取中…';
-      try{
-        const resp = await fetch(`/.netlify/functions/fetch-104-job?id=${encodeURIComponent(raw)}`);
-        const data = await resp.json();
-        if(!data.ok){
-          j104Result.innerHTML = `<div class="jd-check-box needs_improvement">${escapeHtml(data.message||'自動擷取失敗，請改用複製貼上。')}</div>`;
-        }else{
-          j.title = data.title || j.title;
-          j.text = data.text || j.text;
-          if(data.salaryMax) j.salaryMax = String(data.salaryMax);
-          renderJobList();
-          return; // renderJobList already redraws this card with the new values
-        }
-      }catch(e){
-        j104Result.innerHTML = `<div class="jd-check-box needs_improvement">網路連線失敗，104自動擷取本來就非官方功能、不一定每次都能成功，請改用複製貼上職缺內容。</div>`;
-      }finally{
-        j104Btn.disabled = false; j104Btn.textContent = origTxt;
-      }
-    };
     card.querySelector('.jedu').onchange = e=>{ j.hardEdu = e.target.value; };
     card.querySelector('.jyears').oninput = e=>{ j.hardMinYears = e.target.value; };
     card.querySelector('.jkw').oninput = e=>{ j.hardKeywords = e.target.value; };
